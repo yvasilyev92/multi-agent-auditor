@@ -1,0 +1,25 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.streamlit/secrets.toml
+.DS_Store
+.idea/
+.vscode/
+
+# Foundry leftovers if a run leaks into the repo
+out/
+cache/
+broadcast/
+lib/
+
+# Ad-hoc workdirs
+.auditor-work/
+test-pipeline-llm-reports/
+*.log
+
