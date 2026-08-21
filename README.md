@@ -105,6 +105,7 @@ Fill in:
 OPENAI_API_KEY=
 ETHERSCAN_API_KEY=
 INFURA_URL=https://mainnet.infura.io/v3/<key>
+PRIVATE_KEY=          # only for the optional mainnet fixture deploy below
 ```
 
 `INFURA_URL` is any Ethereum HTTPS RPC used as `forge --fork-url` (Infura, Alchemy, etc.).
@@ -118,6 +119,32 @@ uv run streamlit run app.py
 ```
 
 Paste a verified mainnet address, optionally pin a fork block, and click **Audit**.
+
+### 6b. Optional: deploy ReentrancyVault on Ethereum mainnet
+
+The Streamlit app fetches **verified** source from Etherscan (chain id 1). The local Anvil fixtures are not on Etherscan. To exercise the live fetch path, you can broadcast the same empty vault and then **only fork that address** in the auditor — do not deposit or withdraw on live mainnet.
+
+This spends real ETH on **gas for the deploy tx only**. Simulate first.
+
+From the repo root:
+
+```bash
+set -a && source .env && set +a
+cd fixtures
+
+# Dry run (no transaction)
+forge script script/DeployReentrancyVault.s.sol:DeployReentrancyVault --rpc-url "$INFURA_URL"
+
+# Broadcast + Etherscan verify
+forge script script/DeployReentrancyVault.s.sol:DeployReentrancyVault \
+  --rpc-url "$INFURA_URL" \
+  --broadcast \
+  --verify \
+  --etherscan-api-key "$ETHERSCAN_API_KEY" \
+  -vvvv
+```
+
+The script refuses to run unless `block.chainid == 1`. It prints `ReentrancyVault: 0x…`. Wait until Etherscan shows **Contract Source Code Verified**, then paste that address into the app. The auditor’s PoCs still run only on a local fork.
 
 ### 7. Tests
 
