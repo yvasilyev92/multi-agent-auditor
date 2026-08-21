@@ -4,6 +4,50 @@ Defensive Ethereum audit tool. It fetches verified source, runs Slither, triages
 
 Nothing is ever broadcast to the live chain. A passing PoC is strong evidence, not a substitute for human review.
 
+## Agents and orchestration
+
+There is **no LangGraph**. `auditor/orchestrator.py` runs a **fixed sequential pipeline** in Python: tools then agents then more tools. LangChain is used only inside the LLM steps (`ChatOpenAI.with_structured_output` via LCEL in `auditor/agents/llm.py`). Each LLM call is a one-shot system+human prompt that must return a Pydantic schema.
+
+```
+FetcherTool → StaticAnalysisTool → TriageAgent → ExploitAgent + ForgeRunnerTool (retry) → ReportAgent
+```
+
+**Tools (no LLM)** — subprocess / HTTP, deterministic:
+
+| Tool | Role |
+|---|---|
+| `FetcherTool` | Verified source from Etherscan (or local fixture files). Follows EIP-1967 proxies. |
+| `StaticAnalysisTool` | `solc-select` + `slither --json`. |
+| `ForgeRunnerTool` | Throwaway `forge init` project, `forge test --fork-url` on the local fork. |
+
+**Agents (LLM)** — three structured-output chains:
+
+| Agent | Input | Output | When it runs |
+|---|---|---|---|
+| **TriageAgent** | Source + parsed Slither findings | Deduped candidates with severity, category, rationale, remediation | Once per contract |
+| **ExploitAgent** | One Critical/High candidate + source + (on retry) previous test + forge error | A self-contained Foundry test (`test_code`) | Once per Critical/High finding, then again on each failed attempt |
+| **ReportAgent** | Full `AuditResult` JSON | Markdown report | Once at the end (falls back to a template if the LLM fails) |
+
+Medium/Low triage items skip ExploitAgent and are marked **static-only**.
+
+### PoC retry loop
+
+For each Critical/High candidate the orchestrator:
+
+1. Asks ExploitAgent to **generate** a Foundry test (call the live address; `forge test --fork-url` already selected the fork — tests must not call `vm.createSelectFork`).
+2. Rewrites address literals to EIP-55 checksums, then runs `forge test`.
+3. If the test **passes** → finding is **CONFIRMED via PoC**. Stop.
+4. If it fails (compile error, revert, failed assertion) → feed the forge output back to ExploitAgent **revise** and retry, up to `MAX_RETRIES` (default 3).
+5. If all attempts fail → finding stays **unconfirmed**. The pipeline does not learn from that run; the report still includes the last forge error.
+
+Eval writes each attempt next to the markdown report (`test-pipeline-llm-reports/<timestamp>/<Contract>-<finding>-attempt-N.sol` + `.txt`) so a failed confirmation can be inspected.
+
+### Finding statuses
+
+- **CONFIRMED via PoC** — generated `forge test` passed on the local fork.
+- **unconfirmed** — Critical/High, PoCs ran, none passed (treated as a likely false positive until a human reviews).
+- **static-only** — triaged but not Critical/High, so no PoC was attempted.
+
 ## How confirmation works
 
 1. **Fetch** verified Solidity from Etherscan (flattened or standard-json-input). Follow EIP-1967 proxies and audit the implementation too.
