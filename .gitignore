@@ -22,4 +22,4 @@ lib/
 .auditor-work/
 test-pipeline-llm-reports/
 *.log
-
+proj-goal.txt
