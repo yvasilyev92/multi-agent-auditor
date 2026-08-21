@@ -6,7 +6,7 @@ Nothing is ever broadcast to the live chain. A passing PoC is strong evidence, n
 
 ## Agents and orchestration
 
-There is **no LangGraph**. `auditor/orchestrator.py` runs a **fixed sequential pipeline** in Python: tools then agents then more tools. LangChain is used only inside the LLM steps (`ChatOpenAI.with_structured_output` via LCEL in `auditor/agents/llm.py`). Each LLM call is a one-shot system+human prompt that must return a Pydantic schema.
+`auditor/orchestrator.py` runs a sequential pipeline: tools, then agents, then more tools. LLM steps use LangChain structured output (`ChatOpenAI.with_structured_output`) so each call returns a Pydantic schema.
 
 ```
 FetcherTool → StaticAnalysisTool → TriageAgent → ExploitAgent + ForgeRunnerTool (retry) → ReportAgent
@@ -196,7 +196,7 @@ auditor/
   config.py                models, retries, timeouts, secrets
   models.py                Pydantic types
   orchestrator.py          sequential pipeline + PoC retry loop
-  agents/                  LCEL structured-output chains (no LangGraph)
+  agents/                  triage, exploit, and report LLM chains
   tools/                   Etherscan, Slither, Foundry (subprocess)
   ui/                      Streamlit page
   eval.py                  scorecard CLI
